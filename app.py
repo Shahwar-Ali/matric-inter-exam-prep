@@ -95,7 +95,7 @@ if "evaluation_result" not in st.session_state:
 st.title("📚 Matric & Inter Textbook Exam Prep Coach")
 st.caption("Upload any textbook chapter PDF or paste notes to generate board-pattern questions and receive strict grading.")
 
-# --- Tab 1: Chapter Input ---
+# --- Step 1: Chapter Input ---
 if not st.session_state.chapter_text:
     st.subheader("1️⃣ Provide Your Textbook Chapter")
     upload_tab, paste_tab = st.tabs(["📄 Upload Textbook Chapter (PDF)", "📝 Paste Text / Notes"])
@@ -108,7 +108,7 @@ if not st.session_state.chapter_text:
                 if not extracted.strip():
                     st.error("No readable text found. Please ensure the PDF is not a low-res image scan.")
                 else:
-                    st.session_state.chapter_text = extracted[:35000]  # Safe token budget
+                    st.session_state.chapter_text = extracted[:35000]
                     st.success("Chapter text extracted successfully!")
                     st.rerun()
                     
@@ -118,7 +118,7 @@ if not st.session_state.chapter_text:
             st.session_state.chapter_text = pasted_text.strip()
             st.rerun()
 
-# --- Tab 2: Question Generation & Testing ---
+# --- Step 2: Question Generation ---
 if st.session_state.chapter_text and st.session_state.quiz_data is None:
     st.info("✅ Chapter loaded! Select your question distribution and generate the test.")
     
@@ -195,7 +195,7 @@ Output ONLY the JSON object. Do not wrap in markdown or backticks.
                 except Exception as e:
                     st.error(f"Error parsing questions from textbook: {str(e)}")
 
-# --- Tab 3: Interactive Exam Sheet ---
+# --- Step 3: Interactive Exam Sheet ---
 if st.session_state.quiz_data and st.session_state.evaluation_result is None:
     quiz = st.session_state.quiz_data
     st.subheader("📝 Answer Your Exam Paper")
@@ -265,14 +265,14 @@ Grading Rules:
 
 Output strictly valid JSON with this schema:
 {{
-  "total_marks_obtained": <number>,
-  "total_maximum_marks": <number>,
-  "percentage": <number>,
+  "total_marks_obtained": 0,
+  "total_maximum_marks": 0,
+  "percentage": 0,
   "general_verdict": "string in chosen language",
   "mcq_evaluations": [
     {{
-      "id": <number>,
-      "is_correct": <boolean>,
+      "id": 1,
+      "is_correct": true,
       "student_choice": "string",
       "correct_choice": "string",
       "explanation": "string in chosen language"
@@ -281,8 +281,8 @@ Output strictly valid JSON with this schema:
   "subjective_evaluations": [
     {{
       "question": "string",
-      "marks_awarded": <number>,
-      "max_marks": <number>,
+      "marks_awarded": 0,
+      "max_marks": 0,
       "feedback": "string in chosen language",
       "textbook_reference": "exact excerpt or fact from the textbook chapter",
       "model_answer": "ideal answer in chosen language to score full marks"
@@ -304,4 +304,40 @@ Output strictly valid JSON with this schema:
                 st.session_state.evaluation_result = json.loads(clean_eval)
                 st.rerun()
             except Exception as e:
-                st.error(f"Error evaluating paper
+                st.error(f"Error evaluating paper: {str(e)}")
+
+# --- Step 4: Evaluation Results Screen ---
+if st.session_state.evaluation_result is not None:
+    res = st.session_state.evaluation_result
+    st.success("🏁 Paper Graded Successfully!")
+    
+    # Score Metrics
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Marks Obtained", f"{res.get('total_marks_obtained', 0)} / {res.get('total_maximum_marks', 0)}")
+    m2.metric("Percentage", f"{res.get('percentage', 0)}%")
+    m3.metric("Language", explanation_lang)
+    
+    st.info(f"**Examiner's Remarks:** {res.get('general_verdict', '')}")
+    
+    # MCQ Breakdown
+    if res.get("mcq_evaluations"):
+        st.markdown("### 🔘 MCQ Results")
+        for item in res["mcq_evaluations"]:
+            status = "✅ Correct" if item.get("is_correct") else "❌ Incorrect"
+            with st.expander(f"MCQ #{item.get('id')} — {status}"):
+                st.write(f"**Your Answer:** {item.get('student_choice', 'Unanswered')}")
+                st.write(f"**Correct Answer:** {item.get('correct_choice', '')}")
+                st.markdown(f"**Explanation:** {item.get('explanation', '')}")
+                
+    # Subjective Question Breakdown
+    if res.get("subjective_evaluations"):
+        st.markdown("### 📝 Short & Long Question Feedback")
+        for subj in res["subjective_evaluations"]:
+            with st.expander(f"Question: {subj.get('question')} (Marks: {subj.get('marks_awarded')}/{subj.get('max_marks')})"):
+                st.markdown(f"**Examiner Feedback:** {subj.get('feedback')}")
+                st.info(f"**📖 Textbook Reference Fact:** {subj.get('textbook_reference')}")
+                st.markdown(f"**🌟 Model Board-Standard Answer:**\n{subj.get('model_answer')}")
+
+    if st.button("⬅️ Practice Another Chapter"):
+        st.session_state.clear()
+        st.rerun()
