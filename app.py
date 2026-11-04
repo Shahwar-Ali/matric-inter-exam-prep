@@ -15,6 +15,18 @@ st.set_page_config(
 
 MODEL_NAME = "gemini-3.5-flash-lite"
 
+# --- JSON String Cleanup Helper ---
+def clean_json_string(raw_text: str) -> str:
+    """Safely strips markdown code blocks and whitespace from JSON strings."""
+    text = raw_text.strip()
+    if text.startswith("```json"):
+        text = text[7:]
+    elif text.startswith("```"):
+        text = text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    return text.strip()
+
 # --- Resilient API Call Helper ---
 def safe_generate_content(client, model, contents, config, retries=3):
     """Retries on momentary Google server or network bottlenecks."""
@@ -96,7 +108,7 @@ if not st.session_state.chapter_text:
                 if not extracted.strip():
                     st.error("No readable text found. Please ensure the PDF is not a low-res image scan.")
                 else:
-                    st.session_state.chapter_text = extracted[:35000] # Safe token limit
+                    st.session_state.chapter_text = extracted[:35000]  # Safe token budget
                     st.success("Chapter text extracted successfully!")
                     st.rerun()
                     
@@ -177,8 +189,7 @@ Output ONLY the JSON object. Do not wrap in markdown or backticks.
                             response_mime_type="application/json"
                         )
                     )
-                    clean_res = response.text.strip().replace("
-```json", "").replace("```", "")
+                    clean_res = clean_json_string(response.text)
                     st.session_state.quiz_data = json.loads(clean_res)
                     st.rerun()
                 except Exception as e:
@@ -289,45 +300,8 @@ Output strictly valid JSON with this schema:
                         response_mime_type="application/json"
                     )
                 )
-                clean_eval = eval_res.text.strip().replace("
-```json", "").replace("```", "")
+                clean_eval = clean_json_string(eval_res.text)
                 st.session_state.evaluation_result = json.loads(clean_eval)
                 st.rerun()
             except Exception as e:
-                st.error(f"Error evaluating paper: {str(e)}")
-
-# --- Tab 4: Evaluation Results Screen ---
-if st.session_state.evaluation_result is not None:
-    res = st.session_state.evaluation_result
-    st.success("🏁 Paper Graded Successfully!")
-    
-    # Score Metrics
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Marks Obtained", f"{res.get('total_marks_obtained', 0)} / {res.get('total_maximum_marks', 0)}")
-    m2.metric("Percentage", f"{res.get('percentage', 0)}%")
-    m3.metric("Language", explanation_lang)
-    
-    st.info(f"**Examiner's Remarks:** {res.get('general_verdict', '')}")
-    
-    # MCQ Breakdown
-    if res.get("mcq_evaluations"):
-        st.markdown("### 🔘 MCQ Results")
-        for item in res["mcq_evaluations"]:
-            status = "✅ Correct" if item.get("is_correct") else "❌ Incorrect"
-            with st.expander(f"MCQ #{item.get('id')} — {status}"):
-                st.write(f"**Your Answer:** {item.get('student_choice', 'Unanswered')}")
-                st.write(f"**Correct Answer:** {item.get('correct_choice', '')}")
-                st.markdown(f"**Explanation:** {item.get('explanation', '')}")
-                
-    # Subjective Question Breakdown
-    if res.get("subjective_evaluations"):
-        st.markdown("### 📝 Short & Long Question Feedback")
-        for subj in res["subjective_evaluations"]:
-            with st.expander(f"Question: {subj.get('question')} (Marks: {subj.get('marks_awarded')}/{subj.get('max_marks')})"):
-                st.markdown(f"**Examiner Feedback:** {subj.get('feedback')}")
-                st.info(f"**📖 Textbook Reference Fact:** {subj.get('textbook_reference')}")
-                st.markdown(f"**🌟 Model Board-Standard Answer:**\n{subj.get('model_answer')}")
-
-    if st.button("⬅️ Practice Another Chapter"):
-        st.session_state.clear()
-        st.rerun()
+                st.error(f"Error evaluating paper
